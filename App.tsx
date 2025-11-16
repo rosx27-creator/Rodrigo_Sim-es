@@ -203,8 +203,10 @@ const App: React.FC = () => {
 
   const handleSortTeams = async () => {
     const confirmedPlayers = players.filter(p => p.confirmed);
-    if (confirmedPlayers.length < matchDetails.teamsCount * 2) {
-      alert(`Precisa de pelo menos ${matchDetails.teamsCount * 2} jogadores confirmados para sortear.`);
+    
+    // Alterado: Reduzido o limite mínimo para 2 jogadores totais, independente da quantidade de times.
+    if (confirmedPlayers.length < 2) {
+      alert(`Precisa de pelo menos 2 jogadores confirmados para realizar um sorteio.`);
       return;
     }
 
