@@ -64,10 +64,8 @@ export const generateBalancedTeams = async (
   });
 
   // 6. Estatísticas
-  const teamNames = ["Colete", "Sem Colete", "Meião", "Chuteira"];
-  
   teams.forEach((team, i) => {
-    team.name = teamNames[i] || `Time ${i + 1}`;
+    team.name = `Time ${i + 1}`;
     const totalLevel = team.players.reduce((sum, p) => sum + p.level, 0);
     const count = team.players.length;
     team.stats = {
