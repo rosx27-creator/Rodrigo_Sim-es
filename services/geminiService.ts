@@ -2,16 +2,19 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Player, MatchDetails, SortResult } from "../types";
 
-// Initialize Gemini client
-// Note: In a real production app, this key should be proxied securely.
-// Here we assume process.env.API_KEY is available in the environment.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Helper function to initialize AI only when needed.
+// This prevents "process is not defined" or missing key errors during initial page load.
+const getAI = () => {
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+};
 
 export const generateBalancedTeams = async (
   players: Player[],
   numberOfTeams: number
 ): Promise<SortResult> => {
   
+  // Initialize inside the function
+  const ai = getAI();
   const model = "gemini-2.5-flash";
 
   const prompt = `
@@ -81,34 +84,52 @@ export const generateBalancedTeams = async (
 };
 
 export const generateInviteMessage = async (match: MatchDetails): Promise<string> => {
+  const ai = getAI();
   const model = "gemini-2.5-flash";
   
+  // Create a direct WhatsApp link if phone is available
+  const cleanPhone = match.organizerPhone ? match.organizerPhone.replace(/\D/g, '') : '';
+  const confirmLink = cleanPhone 
+    ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent("Confirmo minha presença na pelada! ⚽")}`
+    : "[Link Indisponível - Adicione o telefone do organizador]";
+
   const prompt = `
     Crie uma mensagem curta, divertida e empolgante para enviar no grupo de WhatsApp da pelada.
+    
     Detalhes:
     - Data: ${match.date}
     - Hora: ${match.time}
     - Local: ${match.location}
     
-    A mensagem deve chamar a galera para confirmar presença clicando no link. Use emojis de futebol.
+    Instrução Obrigatória:
+    Você DEVE incluir este link exato no final da mensagem para confirmação: ${confirmLink}
+    
+    A mensagem deve chamar a galera para clicar no link. Use emojis de futebol.
   `;
 
   const response = await ai.models.generateContent({
     model: model,
     contents: prompt,
     config: {
-      maxOutputTokens: 200,
+      maxOutputTokens: 300,
       temperature: 0.8
     }
   });
 
-  return response.text || "Bora pra pelada! Confirme sua presença.";
+  return response.text || `Bora pra pelada! Confirme sua presença: ${confirmLink}`;
 };
 
 export const generateReminderMessage = async (match: MatchDetails, players: Player[]): Promise<string> => {
+  const ai = getAI();
   const model = "gemini-2.5-flash";
   
   const confirmedNames = players.map(p => p.name).join(", ");
+  
+  // Create a direct WhatsApp link if phone is available
+  const cleanPhone = match.organizerPhone ? match.organizerPhone.replace(/\D/g, '') : '';
+  const confirmLink = cleanPhone 
+    ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent("Vou jogar! Foi mal a demora 🏃‍♂️")}`
+    : "";
 
   const prompt = `
     Crie uma mensagem curta e urgente (mas divertida) para lembrar o pessoal do jogo de amanhã.
@@ -120,13 +141,14 @@ export const generateReminderMessage = async (match: MatchDetails, players: Play
     Jogadores já confirmados: ${confirmedNames}
     
     O objetivo é fazer quem não confirmou se mexer. Use emojis.
+    ${confirmLink ? `Inclua este link para quem for confirmar agora: ${confirmLink}` : ''}
   `;
 
   const response = await ai.models.generateContent({
     model: model,
     contents: prompt,
     config: {
-      maxOutputTokens: 250,
+      maxOutputTokens: 300,
       temperature: 0.8
     }
   });
