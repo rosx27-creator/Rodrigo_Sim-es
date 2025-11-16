@@ -1,13 +1,14 @@
 
 import React from 'react';
 import { Player, PlayerType, Position } from '../types';
-import { Trash2, User, UserCheck, Star, Shield, PersonStanding, Goal, Footprints } from 'lucide-react';
+import { Trash2, User, UserCheck, Star, Shield, PersonStanding, Goal, Footprints, Pencil } from 'lucide-react';
 
 interface PlayerListProps {
   players: Player[];
   maxPlayers: number;
   onRemove: (id: string) => void;
   onToggleConfirm: (id: string) => void;
+  onEdit: (player: Player) => void;
 }
 
 const PositionIcon = ({ position }: { position: Position }) => {
@@ -20,7 +21,7 @@ const PositionIcon = ({ position }: { position: Position }) => {
     }
 }
 
-export const PlayerList: React.FC<PlayerListProps> = ({ players, maxPlayers, onRemove, onToggleConfirm }) => {
+export const PlayerList: React.FC<PlayerListProps> = ({ players, maxPlayers, onRemove, onToggleConfirm, onEdit }) => {
   const isLimitReached = players.length >= maxPlayers;
 
   return (
@@ -39,7 +40,7 @@ export const PlayerList: React.FC<PlayerListProps> = ({ players, maxPlayers, onR
           Nenhum jogador adicionado ainda.
         </div>
       ) : (
-        <div className="overflow-x-auto overflow-y-auto max-h-[600px] scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
+        <div className="overflow-x-auto overflow-y-auto max-h-[600px] custom-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead className="sticky top-0 bg-slate-800 z-10 shadow-md">
               <tr className="text-slate-400 text-xs uppercase border-b border-slate-700">
@@ -105,8 +106,16 @@ export const PlayerList: React.FC<PlayerListProps> = ({ players, maxPlayers, onR
                              </a>
                         )}
                         <button
+                            onClick={() => onEdit(player)}
+                            className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-900/20 rounded-lg transition-colors"
+                            title="Editar jogador"
+                        >
+                            <Pencil size={16} />
+                        </button>
+                        <button
                             onClick={() => onRemove(player.id)}
                             className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+                            title="Remover jogador"
                         >
                             <Trash2 size={16} />
                         </button>

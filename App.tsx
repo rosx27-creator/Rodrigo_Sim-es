@@ -8,6 +8,7 @@ import { TeamDisplay } from './components/TeamDisplay';
 import { LoginScreen } from './components/LoginScreen';
 import { AdminDashboard } from './components/AdminDashboard';
 import { ReminderModal } from './components/ReminderModal';
+import { EditPlayerModal } from './components/EditPlayerModal';
 import { NotificationToast, Notification } from './components/NotificationToast';
 import { generateBalancedTeams, generateInviteMessage, generateReminderMessage } from './services/geminiService';
 import { Trophy, Sparkles, MessageCircle, Loader2, LogOut, User, Crown, Bell } from 'lucide-react';
@@ -81,6 +82,9 @@ const App: React.FC = () => {
 
   // State for Players
   const [players, setPlayers] = useState<Player[]>([]);
+
+  // State for Editing
+  const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
 
   // State for Notifications
   const [notification, setNotification] = useState<Notification | null>(null);
@@ -164,6 +168,16 @@ const App: React.FC = () => {
     }
     setPlayers(prev => [...prev, player]);
     showNotification(`${player.name} adicionado com sucesso!`);
+  };
+
+  const handleEditPlayer = (player: Player) => {
+      setEditingPlayer(player);
+  };
+
+  const handleUpdatePlayer = (updatedPlayer: Player) => {
+      setPlayers(prev => prev.map(p => p.id === updatedPlayer.id ? updatedPlayer : p));
+      showNotification("Jogador atualizado com sucesso!");
+      setEditingPlayer(null);
   };
 
   const handleRemovePlayer = (id: string) => {
@@ -251,6 +265,16 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-900 pb-20">
       <NotificationToast notification={notification} onClose={() => setNotification(null)} />
+
+      {/* Edit Player Modal */}
+      {editingPlayer && (
+          <EditPlayerModal 
+            isOpen={!!editingPlayer}
+            onClose={() => setEditingPlayer(null)}
+            player={editingPlayer}
+            onSave={handleUpdatePlayer}
+          />
+      )}
 
       {/* Reminder Modal */}
       {isReminderModalOpen && (
@@ -365,7 +389,8 @@ const App: React.FC = () => {
                     players={players} 
                     maxPlayers={PLAN_LIMITS[currentUser.plan]}
                     onRemove={handleRemovePlayer} 
-                    onToggleConfirm={handleToggleConfirm} 
+                    onToggleConfirm={handleToggleConfirm}
+                    onEdit={handleEditPlayer}
                 />
             </div>
         </div>
