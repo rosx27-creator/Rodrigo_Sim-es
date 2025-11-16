@@ -52,6 +52,13 @@ export interface MatchDetails {
   organizerPhone: string;
 }
 
+export interface Match {
+  id: string;
+  details: MatchDetails;
+  players: Player[];
+  createdAt: number;
+}
+
 export interface Team {
   name: string;
   players: Player[];

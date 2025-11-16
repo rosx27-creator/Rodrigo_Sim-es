@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { MatchDetails, Player, SortResult, PlanTier, PLAN_LIMITS, UserAccount } from './types';
+import { MatchDetails, Player, SortResult, PlanTier, PLAN_LIMITS, UserAccount, Match } from './types';
 import { MatchSetup } from './components/MatchSetup';
 import { PlayerForm } from './components/PlayerForm';
 import { PlayerList } from './components/PlayerList';
@@ -9,9 +9,11 @@ import { LoginScreen } from './components/LoginScreen';
 import { AdminDashboard } from './components/AdminDashboard';
 import { WhatsAppModal } from './components/WhatsAppModal';
 import { EditPlayerModal } from './components/EditPlayerModal';
+import { ImportListModal } from './components/ImportListModal';
+import { MatchManager } from './components/MatchManager';
 import { NotificationToast, Notification } from './components/NotificationToast';
 import { generateBalancedTeams, generateInviteMessage, generateReminderMessage } from './services/geminiService';
-import { Trophy, Sparkles, MessageCircle, Loader2, LogOut, User, Crown, Bell, Calculator } from 'lucide-react';
+import { Trophy, MessageCircle, Loader2, LogOut, User, Crown, Bell, Calculator, CalendarDays } from 'lucide-react';
 
 const DEFAULT_ADMIN: UserAccount = {
     id: 'admin-001',
@@ -72,19 +74,151 @@ const App: React.FC = () => {
   };
 
 
-  // --- APP LOGIC (MATCH) ---
+  // --- APP LOGIC (MATCH MANAGEMENT) ---
   const getStorageKey = (key: string) => currentUser ? `${key}_${currentUser.id}` : key;
 
-  // State for Match Details
-  const [matchDetails, setMatchDetails] = useState<MatchDetails>({
-    date: '', time: '', location: '', organizerPhone: '', teamsCount: 2
-  });
+  // State for All Matches
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [activeMatchId, setActiveMatchId] = useState<string>('');
+  const [isMatchManagerOpen, setIsMatchManagerOpen] = useState(false);
 
-  // State for Players
-  const [players, setPlayers] = useState<Player[]>([]);
+  // Load user-specific data and migrate if necessary
+  useEffect(() => {
+      if (currentUser && currentUser.role !== 'admin') {
+          try {
+            const savedMatches = localStorage.getItem(getStorageKey('pelada_matches'));
+            
+            if (savedMatches) {
+                const parsedMatches = JSON.parse(savedMatches);
+                setMatches(parsedMatches);
+                // Select most recent or first match
+                if (parsedMatches.length > 0) {
+                    const sorted = [...parsedMatches].sort((a: Match, b: Match) => b.createdAt - a.createdAt);
+                    setActiveMatchId(sorted[0].id);
+                }
+            } else {
+                // Migration Logic: Check for old single-match data
+                const oldMatchDetails = localStorage.getItem(getStorageKey('pelada_match_details'));
+                const oldPlayers = localStorage.getItem(getStorageKey('pelada_players'));
 
+                if (oldMatchDetails) {
+                    const details = JSON.parse(oldMatchDetails);
+                    const players = oldPlayers ? JSON.parse(oldPlayers) : [];
+                    const newId = crypto.randomUUID();
+                    
+                    const initialMatch: Match = {
+                        id: newId,
+                        details,
+                        players,
+                        createdAt: Date.now()
+                    };
+                    setMatches([initialMatch]);
+                    setActiveMatchId(newId);
+                } else {
+                    // No data at all, create blank match
+                    createNewMatch();
+                }
+            }
+          } catch (e) {
+              console.error("Error loading user data", e);
+              createNewMatch();
+          }
+      }
+  }, [currentUser]);
+
+  // Persist Data
+  useEffect(() => {
+    if (currentUser && currentUser.role !== 'admin' && matches.length > 0) {
+        localStorage.setItem(getStorageKey('pelada_matches'), JSON.stringify(matches));
+    }
+  }, [matches, currentUser]);
+
+  // Helper to create a new blank match
+  const createNewMatch = () => {
+      const newId = crypto.randomUUID();
+      const newMatch: Match = {
+          id: newId,
+          details: { date: '', time: '', location: '', organizerPhone: '', teamsCount: 2 },
+          players: [],
+          createdAt: Date.now()
+      };
+      setMatches(prev => [...prev, newMatch]);
+      setActiveMatchId(newId);
+      return newId;
+  };
+
+  // Get Active Match Data safely
+  const activeMatch = matches.find(m => m.id === activeMatchId) || matches[0] || {
+      id: 'temp', details: { date: '', time: '', location: '', organizerPhone: '', teamsCount: 2 }, players: [], createdAt: 0
+  };
+
+  // Update Active Match Helpers
+  const updateActiveMatchDetails = (newDetails: MatchDetails) => {
+      setMatches(prev => prev.map(m => m.id === activeMatchId ? { ...m, details: newDetails } : m));
+  };
+
+  const updateActiveMatchPlayers = (newPlayers: Player[]) => {
+      setMatches(prev => prev.map(m => m.id === activeMatchId ? { ...m, players: newPlayers } : m));
+  };
+
+  const handleDeleteMatch = (id: string) => {
+      if (matches.length <= 1) {
+          alert("Você precisa ter pelo menos uma partida.");
+          return;
+      }
+      if (confirm("Tem certeza que deseja excluir esta partida?")) {
+          const newMatches = matches.filter(m => m.id !== id);
+          setMatches(newMatches);
+          if (activeMatchId === id) {
+              setActiveMatchId(newMatches[0].id);
+          }
+      }
+  };
+
+  const handleReplicateMatch = (months: number) => {
+      if (!activeMatch.details.date) {
+          alert("Defina uma data para a partida atual antes de replicar.");
+          return;
+      }
+
+      const startDate = new Date(activeMatch.details.date);
+      const newMatches: Match[] = [];
+      const weeksToCreate = months * 4; // Approx
+
+      for (let i = 1; i <= weeksToCreate; i++) {
+          const nextDate = new Date(startDate);
+          nextDate.setDate(startDate.getDate() + (i * 7)); // Add 7 days per week
+
+          const dateStr = nextDate.toISOString().split('T')[0]; // YYYY-MM-DD
+
+          // Clone players but reset confirmation
+          const clonedPlayers = activeMatch.players.map(p => ({
+              ...p,
+              confirmed: false
+          }));
+
+          newMatches.push({
+              id: crypto.randomUUID(),
+              details: {
+                  ...activeMatch.details,
+                  date: dateStr
+              },
+              players: clonedPlayers,
+              createdAt: Date.now() + i
+          });
+      }
+
+      setMatches(prev => [...prev, ...newMatches]);
+      showNotification(`${newMatches.length} novas partidas criadas com sucesso!`, 'success');
+  };
+
+  // --- UI STATE ---
+  
   // State for Editing
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
+  
+  // State for Import
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   // State for Notifications
   const [notification, setNotification] = useState<Notification | null>(null);
@@ -92,38 +226,6 @@ const App: React.FC = () => {
   const showNotification = (message: string, type: 'success' | 'info' = 'success') => {
       setNotification({ message, type, id: Date.now() });
   };
-
-  // Load user-specific data
-  useEffect(() => {
-      if (currentUser && currentUser.role !== 'admin') {
-          try {
-            const savedMatch = localStorage.getItem(getStorageKey('pelada_match_details'));
-            if (savedMatch) setMatchDetails(JSON.parse(savedMatch));
-            else setMatchDetails({ date: '', time: '', location: '', organizerPhone: '', teamsCount: 2 });
-
-            const savedPlayers = localStorage.getItem(getStorageKey('pelada_players'));
-            if (savedPlayers) setPlayers(JSON.parse(savedPlayers));
-            else setPlayers([]);
-
-            setSortResult(null);
-          } catch (e) {
-              console.error("Error loading user data", e);
-          }
-      }
-  }, [currentUser]);
-
-  // Persist Data
-  useEffect(() => {
-    if (currentUser && currentUser.role !== 'admin') {
-        localStorage.setItem(getStorageKey('pelada_match_details'), JSON.stringify(matchDetails));
-    }
-  }, [matchDetails, currentUser]);
-
-  useEffect(() => {
-    if (currentUser && currentUser.role !== 'admin') {
-        localStorage.setItem(getStorageKey('pelada_players'), JSON.stringify(players));
-    }
-  }, [players, currentUser]);
 
   // Logic for Reminders (Is the match tomorrow?)
   const [isMatchTomorrow, setIsMatchTomorrow] = useState(false);
@@ -135,12 +237,12 @@ const App: React.FC = () => {
   }>({ isOpen: false, mode: 'invite' });
 
   useEffect(() => {
-    if (matchDetails.date) {
+    if (activeMatch.details.date) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
         // Correctly parse "YYYY-MM-DD" to local time
-        const [year, month, day] = matchDetails.date.split('-').map(Number);
+        const [year, month, day] = activeMatch.details.date.split('-').map(Number);
         const matchDate = new Date(year, month - 1, day);
         
         const diffTime = matchDate.getTime() - today.getTime();
@@ -152,13 +254,11 @@ const App: React.FC = () => {
             setIsMatchTomorrow(false);
         }
     }
-  }, [matchDetails.date]);
+  }, [activeMatch.details.date]);
 
 
   // State for Generated Teams
   const [sortResult, setSortResult] = useState<SortResult | null>(null);
-  
-  // Loading States
   const [isSorting, setIsSorting] = useState(false);
 
   // Handlers
@@ -166,11 +266,11 @@ const App: React.FC = () => {
     if (!currentUser) return;
     const maxPlayers = PLAN_LIMITS[currentUser.plan];
     
-    if (players.length >= maxPlayers) {
+    if (activeMatch.players.length >= maxPlayers) {
       alert(`Seu plano ${currentUser.plan} permite apenas ${maxPlayers} jogadores. Contate o administrador para upgrade.`);
       return;
     }
-    setPlayers(prev => [...prev, player]);
+    updateActiveMatchPlayers([...activeMatch.players, player]);
     showNotification(`${player.name} adicionado com sucesso!`);
   };
 
@@ -179,24 +279,24 @@ const App: React.FC = () => {
   };
 
   const handleUpdatePlayer = (updatedPlayer: Player) => {
-      setPlayers(prev => prev.map(p => p.id === updatedPlayer.id ? updatedPlayer : p));
+      updateActiveMatchPlayers(activeMatch.players.map(p => p.id === updatedPlayer.id ? updatedPlayer : p));
       showNotification("Jogador atualizado com sucesso!");
       setEditingPlayer(null);
   };
 
   const handleRemovePlayer = (id: string) => {
     if(confirm('Tem certeza que deseja remover este jogador?')) {
-        setPlayers(prev => prev.filter(p => p.id !== id));
+        updateActiveMatchPlayers(activeMatch.players.filter(p => p.id !== id));
     }
   };
 
   const handleToggleConfirm = (id: string) => {
-    const player = players.find(p => p.id === id);
+    const player = activeMatch.players.find(p => p.id === id);
     if (!player) return;
 
     const newStatus = !player.confirmed;
     
-    setPlayers(prev => prev.map(p => 
+    updateActiveMatchPlayers(activeMatch.players.map(p => 
         p.id === id ? { ...p, confirmed: newStatus } : p
     ));
 
@@ -205,24 +305,44 @@ const App: React.FC = () => {
     }
   };
 
+  const handleBulkConfirm = (names: string[]) => {
+      if (names.length === 0) return;
+
+      let confirmedCount = 0;
+      const updatedPlayers = activeMatch.players.map(player => {
+          // Check if player name matches any in the list (simple partial match case-insensitive)
+          const isMatch = names.some(name => 
+              player.name.toLowerCase().includes(name.toLowerCase()) || 
+              name.toLowerCase().includes(player.name.toLowerCase())
+          );
+          
+          if (isMatch && !player.confirmed) {
+              confirmedCount++;
+              return { ...player, confirmed: true };
+          }
+          return player;
+      });
+
+      updateActiveMatchPlayers(updatedPlayers);
+      setImportModalOpen(false);
+      showNotification(`${confirmedCount} jogadores confirmados pela lista!`, 'success');
+  };
+
   const handleSortTeams = async () => {
-    const confirmedPlayers = players.filter(p => p.confirmed);
+    const confirmedPlayers = activeMatch.players.filter(p => p.confirmed);
     
-    // Alterado: Reduzido o limite mínimo para 2 jogadores totais, independente da quantidade de times.
     if (confirmedPlayers.length < 2) {
       alert(`Precisa de pelo menos 2 jogadores confirmados para realizar um sorteio.`);
       return;
     }
 
     setIsSorting(true);
-    // Pequeno delay artificial para dar feedback visual de "processamento"
     setTimeout(async () => {
         try {
-            const result = await generateBalancedTeams(confirmedPlayers, matchDetails.teamsCount);
+            const result = await generateBalancedTeams(confirmedPlayers, activeMatch.details.teamsCount);
             setSortResult(result);
             showNotification("Times sorteados com sucesso!", 'success');
             
-            // Auto-scroll suave para resultados
             setTimeout(() => {
                 const resultsElement = document.getElementById('results');
                 if (resultsElement) {
@@ -240,7 +360,7 @@ const App: React.FC = () => {
   };
 
   const handleOpenInvite = () => {
-      if (!matchDetails.date || !matchDetails.time || !matchDetails.location) {
+      if (!activeMatch.details.date || !activeMatch.details.time || !activeMatch.details.location) {
           alert("Preencha os detalhes da partida primeiro!");
           return;
       }
@@ -273,7 +393,7 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-slate-900 pb-20">
       <NotificationToast notification={notification} onClose={() => setNotification(null)} />
 
-      {/* Edit Player Modal */}
+      {/* Modals */}
       {editingPlayer && (
           <EditPlayerModal 
             isOpen={!!editingPlayer}
@@ -283,18 +403,34 @@ const App: React.FC = () => {
           />
       )}
 
-      {/* Unified WhatsApp Modal (Invite & Reminder) */}
+      <ImportListModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onImport={handleBulkConfirm}
+      />
+
+      <MatchManager
+        isOpen={isMatchManagerOpen}
+        onClose={() => setIsMatchManagerOpen(false)}
+        matches={matches}
+        activeMatchId={activeMatchId}
+        onSelectMatch={(id) => { setActiveMatchId(id); setIsMatchManagerOpen(false); setSortResult(null); }}
+        onCreateMatch={() => { const id = createNewMatch(); setActiveMatchId(id); setIsMatchManagerOpen(false); setSortResult(null); }}
+        onDeleteMatch={handleDeleteMatch}
+        onReplicateMatch={handleReplicateMatch}
+      />
+
       {whatsAppModal.isOpen && (
         <WhatsAppModal
             isOpen={whatsAppModal.isOpen}
             onClose={() => setWhatsAppModal({ ...whatsAppModal, isOpen: false })}
             mode={whatsAppModal.mode}
-            matchDetails={matchDetails}
-            players={whatsAppModal.mode === 'reminder' ? players.filter(p => p.confirmed) : []}
+            matchDetails={activeMatch.details}
+            players={whatsAppModal.mode === 'reminder' ? activeMatch.players.filter(p => p.confirmed) : []}
             onGenerateMessage={() => 
                 whatsAppModal.mode === 'invite' 
-                    ? generateInviteMessage(matchDetails)
-                    : generateReminderMessage(matchDetails, players.filter(p => p.confirmed))
+                    ? generateInviteMessage(activeMatch.details)
+                    : generateReminderMessage(activeMatch.details, activeMatch.players.filter(p => p.confirmed))
             }
         />
       )}
@@ -312,18 +448,20 @@ const App: React.FC = () => {
                 </div>
             </div>
             <div className="flex items-center gap-3">
-                 {/* Plan Badge */}
-                 <div className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded uppercase border ${getPlanBadgeColor()}`}>
+                 {/* Match Manager Button */}
+                 <button
+                    onClick={() => setIsMatchManagerOpen(true)}
+                    className="flex items-center gap-2 text-sm bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition-colors shadow-lg shadow-indigo-500/20"
+                 >
+                    <CalendarDays size={16} />
+                    <span className="hidden sm:inline">Agenda</span>
+                 </button>
+
+                 <div className={`hidden md:flex items-center gap-1 text-xs font-bold px-2 py-1 rounded uppercase border ${getPlanBadgeColor()}`}>
                     {currentUser.plan === PlanTier.PROFISSIONAL && <Crown size={12} />}
                     {currentUser.plan}
                  </div>
-
-                 <div className="hidden md:flex items-center gap-2 text-slate-400 text-sm bg-slate-900/50 px-3 py-1.5 rounded-full border border-slate-700">
-                    <User size={14} />
-                    {currentUser.name}
-                 </div>
                  
-                 {/* Reminder Bell */}
                  <button
                     onClick={handleOpenReminders}
                     className={`relative px-3 py-2 rounded-lg flex items-center justify-center transition-colors border ${
@@ -334,9 +472,6 @@ const App: React.FC = () => {
                     title={isMatchTomorrow ? "Enviar Lembretes (Jogo Amanhã!)" : "Lembretes e Cobranças"}
                  >
                     <Bell size={16} className={isMatchTomorrow ? 'fill-orange-400' : ''} />
-                    {isMatchTomorrow && (
-                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
-                    )}
                  </button>
 
                  <button
@@ -345,7 +480,6 @@ const App: React.FC = () => {
                     title="Criar Convite WhatsApp"
                  >
                     <MessageCircle className="w-4 h-4 text-green-400" />
-                    <span className="hidden sm:inline">Convite</span>
                  </button>
 
                  <button
@@ -354,7 +488,6 @@ const App: React.FC = () => {
                     title="Sair"
                  >
                     <LogOut size={16} />
-                    <span className="hidden sm:inline">Sair</span>
                  </button>
             </div>
         </div>
@@ -365,7 +498,7 @@ const App: React.FC = () => {
         {/* Top Grid: Details and Add Player */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
             <div className="lg:col-span-1">
-                <MatchSetup details={matchDetails} onChange={setMatchDetails} />
+                <MatchSetup details={activeMatch.details} onChange={updateActiveMatchDetails} />
                 
                 <div className="bg-gradient-to-br from-indigo-900 to-slate-900 p-6 rounded-xl border border-indigo-500/30">
                     <h3 className="text-white font-bold mb-2 flex items-center gap-2">
@@ -398,11 +531,12 @@ const App: React.FC = () => {
             <div className="lg:col-span-2">
                 <PlayerForm onAddPlayer={handleAddPlayer} />
                 <PlayerList 
-                    players={players} 
+                    players={activeMatch.players} 
                     maxPlayers={PLAN_LIMITS[currentUser.plan]}
                     onRemove={handleRemovePlayer} 
                     onToggleConfirm={handleToggleConfirm}
                     onEdit={handleEditPlayer}
+                    onImportClick={() => setImportModalOpen(true)}
                 />
             </div>
         </div>

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Player, PlayerType, Position } from '../types';
-import { Trash2, User, UserCheck, Star, Shield, PersonStanding, Goal, Footprints, Pencil } from 'lucide-react';
+import { Trash2, User, UserCheck, Star, Shield, PersonStanding, Goal, Footprints, Pencil, FileText } from 'lucide-react';
 
 interface PlayerListProps {
   players: Player[];
@@ -9,6 +9,7 @@ interface PlayerListProps {
   onRemove: (id: string) => void;
   onToggleConfirm: (id: string) => void;
   onEdit: (player: Player) => void;
+  onImportClick: () => void;
 }
 
 const PositionIcon = ({ position }: { position: Position }) => {
@@ -21,7 +22,7 @@ const PositionIcon = ({ position }: { position: Position }) => {
     }
 }
 
-export const PlayerList: React.FC<PlayerListProps> = ({ players, maxPlayers, onRemove, onToggleConfirm, onEdit }) => {
+export const PlayerList: React.FC<PlayerListProps> = ({ players, maxPlayers, onRemove, onToggleConfirm, onEdit, onImportClick }) => {
   const isLimitReached = players.length >= maxPlayers;
 
   return (
@@ -29,6 +30,13 @@ export const PlayerList: React.FC<PlayerListProps> = ({ players, maxPlayers, onR
       <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/50 shrink-0">
         <h3 className="text-lg font-bold text-white">Jogadores Confirmados</h3>
         <div className="flex items-center gap-2">
+            <button
+                onClick={onImportClick}
+                className="flex items-center gap-1 text-xs bg-indigo-900/30 hover:bg-indigo-900/50 text-indigo-300 border border-indigo-500/30 px-2 py-1 rounded transition-colors mr-1"
+                title="Importar lista de nomes"
+            >
+                <FileText size={12} /> Importar
+            </button>
             <span className={`text-sm px-2 py-1 rounded border ${isLimitReached ? 'bg-red-900/30 border-red-500 text-red-200' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>
             Total: {players.length} / {maxPlayers}
             </span>
