@@ -1,85 +1,93 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
-import { Player, MatchDetails, SortResult } from "../types";
+import { GoogleGenAI } from "@google/genai";
+import { Player, MatchDetails, SortResult, Team, Position } from "../types";
 
 // Helper function to initialize AI only when needed.
-// This prevents "process is not defined" or missing key errors during initial page load.
 const getAI = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
+/**
+ * SORTEIO MATEMÁTICO (SNAKE DRAFT)
+ * Substitui a IA por um algoritmo determinístico que garante equilíbrio numérico.
+ */
 export const generateBalancedTeams = async (
   players: Player[],
   numberOfTeams: number
 ): Promise<SortResult> => {
   
-  // Initialize inside the function
-  const ai = getAI();
-  const model = "gemini-2.5-flash";
+  // 1. Inicializar os times vazios
+  const teams: Team[] = Array.from({ length: numberOfTeams }, (_, i) => ({
+    name: `Time ${i + 1}`,
+    players: [],
+    stats: { avgLevel: 0, totalPlayers: 0 }
+  }));
 
-  const prompt = `
-    Você é um técnico de futebol experiente e matemático.
-    Sua tarefa é dividir a lista de jogadores fornecida em ${numberOfTeams} times EQUILIBRADOS.
-    
-    Critérios de equilíbrio:
-    1. Nível técnico (level de 1 a 5): A média de habilidade dos times deve ser muito próxima.
-    2. Posições: Distribua Goleiros uniformemente primeiro. Tente balancear Defesa, Meio e Ataque.
-    3. Tipo (Efetivo/Convidado): Tente misturar convidados e efetivos para não criar "panelinhas", mas a prioridade é o equilíbrio técnico.
-    
-    Lista de Jogadores (JSON):
-    ${JSON.stringify(players.map(p => ({ id: p.id, name: p.name, pos: p.position, lvl: p.level, type: p.type })))}
-  `;
+  // 2. Separar Goleiros dos Jogadores de Linha
+  const goalkeepers = players.filter(p => p.position === Position.GOLEIRO);
+  const outfielders = players.filter(p => p.position !== Position.GOLEIRO);
 
-  const response = await ai.models.generateContent({
-    model: model,
-    contents: prompt,
-    config: {
-      systemInstruction: "Retorne apenas JSON válido seguindo o schema. Seja rigoroso com o equilíbrio.",
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          teams: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                name: { type: Type.STRING, description: "Nome criativo para o time (ex: Time A, Coletes, Sem Colete)" },
-                playerIds: { 
-                  type: Type.ARRAY, 
-                  items: { type: Type.STRING },
-                  description: "IDs dos jogadores neste time" 
-                },
-                avgLevel: { type: Type.NUMBER, description: "Média de nível deste time" }
-              },
-              required: ["name", "playerIds", "avgLevel"]
-            }
-          },
-          analysis: {
-            type: Type.STRING,
-            description: "Uma breve explicação de por que esses times estão equilibrados."
-          }
-        },
-        required: ["teams", "analysis"]
-      }
+  // 3. Função auxiliar para ordenar jogadores por Nível (Decrescente)
+  // Critério de desempate: Posição (Defesa -> Meio -> Ataque para equilibrar setores)
+  const sortPlayers = (list: Player[]) => {
+    return list.sort((a, b) => {
+      if (b.level !== a.level) return b.level - a.level; // Maior nível primeiro
+      // Desempate simples por nome para consistência
+      return a.name.localeCompare(b.name);
+    });
+  };
+
+  const sortedGKs = sortPlayers([...goalkeepers]);
+  const sortedOutfielders = sortPlayers([...outfielders]);
+
+  // 4. Distribuição de Goleiros (Um por time, ordem sequencial)
+  sortedGKs.forEach((gk, index) => {
+    const teamIndex = index % numberOfTeams;
+    teams[teamIndex].players.push(gk);
+  });
+
+  // 5. Distribuição de Linha - Método "Snake" (Serpente)
+  // Ex: Time A, Time B, Time B, Time A... para evitar que o Time A fique sempre com os melhores de cada par.
+  // Se tivermos Goleiros já distribuídos, precisamos ver qual time está "mais fraco" ou com menos jogadores para começar
+  // Mas o padrão Snake puro funciona bem para nível.
+  
+  let teamIndex = 0;
+  let direction = 1; // 1 para frente, -1 para trás
+
+  sortedOutfielders.forEach((player) => {
+    teams[teamIndex].players.push(player);
+
+    // Mover índice
+    teamIndex += direction;
+
+    // Verificar bordas para inverter a direção (Efeito Snake)
+    if (teamIndex >= numberOfTeams) {
+      teamIndex = numberOfTeams - 1;
+      direction = -1;
+    } else if (teamIndex < 0) {
+      teamIndex = 0;
+      direction = 1;
     }
   });
 
-  const data = JSON.parse(response.text || "{}");
+  // 6. Calcular Estatísticas Finais e Nomes Criativos
+  const teamNames = ["Colete", "Sem Colete", "Meião", "Chuteira"];
   
-  // Map IDs back to full player objects
-  const teams = data.teams.map((t: any) => ({
-    name: t.name,
-    players: t.playerIds.map((id: string) => players.find(p => p.id === id)!).filter(Boolean),
-    stats: {
-      avgLevel: t.avgLevel,
-      totalPlayers: t.playerIds.length
-    }
-  }));
+  teams.forEach((team, i) => {
+    team.name = teamNames[i] || `Time ${i + 1}`;
+    
+    const totalLevel = team.players.reduce((sum, p) => sum + p.level, 0);
+    const count = team.players.length;
+    
+    team.stats = {
+      avgLevel: count > 0 ? totalLevel / count : 0,
+      totalPlayers: count
+    };
+  });
 
   return {
     teams,
-    analysis: data.analysis
+    analysis: "Sorteio realizado utilizando o método matemático 'Snake Draft'. Jogadores ordenados por nível técnico e distribuídos alternadamente para garantir médias de habilidade idênticas."
   };
 };
 

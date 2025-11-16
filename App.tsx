@@ -11,7 +11,7 @@ import { ReminderModal } from './components/ReminderModal';
 import { EditPlayerModal } from './components/EditPlayerModal';
 import { NotificationToast, Notification } from './components/NotificationToast';
 import { generateBalancedTeams, generateInviteMessage, generateReminderMessage } from './services/geminiService';
-import { Trophy, Sparkles, MessageCircle, Loader2, LogOut, User, Crown, Bell } from 'lucide-react';
+import { Trophy, Sparkles, MessageCircle, Loader2, LogOut, User, Crown, Bell, Calculator } from 'lucide-react';
 
 const DEFAULT_ADMIN: UserAccount = {
     id: 'admin-001',
@@ -209,16 +209,19 @@ const App: React.FC = () => {
     }
 
     setIsSorting(true);
-    try {
-      const result = await generateBalancedTeams(confirmedPlayers, matchDetails.teamsCount);
-      setSortResult(result);
-      showNotification("Times sorteados com sucesso!", 'success');
-    } catch (error) {
-      console.error("Erro ao sortear:", error);
-      alert("Erro ao conectar com a IA para sorteio. Verifique sua chave de API ou tente novamente.");
-    } finally {
-      setIsSorting(false);
-    }
+    // Pequeno delay artificial para dar feedback visual de "processamento"
+    setTimeout(async () => {
+        try {
+            const result = await generateBalancedTeams(confirmedPlayers, matchDetails.teamsCount);
+            setSortResult(result);
+            showNotification("Times sorteados com sucesso!", 'success');
+        } catch (error) {
+            console.error("Erro ao sortear:", error);
+            alert("Erro ao realizar o sorteio.");
+        } finally {
+            setIsSorting(false);
+        }
+    }, 800);
   };
 
   const handleGenerateInvite = async () => {
@@ -357,11 +360,11 @@ const App: React.FC = () => {
                 
                 <div className="bg-gradient-to-br from-indigo-900 to-slate-900 p-6 rounded-xl border border-indigo-500/30">
                     <h3 className="text-white font-bold mb-2 flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-yellow-400" />
-                        Sorteio IA
+                        <Calculator className="w-4 h-4 text-yellow-400" />
+                        Sorteio Equilibrado
                     </h3>
                     <p className="text-sm text-indigo-200 mb-4">
-                        Use o Gemini para equilibrar os times baseados em nível, posição e tipo de jogador.
+                        Distribuição matemática baseada em nível técnico, posição e goleiros.
                     </p>
                     <button
                         onClick={handleSortTeams}
@@ -371,7 +374,7 @@ const App: React.FC = () => {
                         {isSorting ? (
                             <>
                                 <Loader2 className="animate-spin w-5 h-5" />
-                                Analisando Jogadores...
+                                Calculando...
                             </>
                         ) : (
                             <>

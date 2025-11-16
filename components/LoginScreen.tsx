@@ -106,7 +106,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
           <div className="mt-6 text-center">
             <p className="text-sm text-slate-400">
               Esqueceu a senha?{' '}
-              <a href="#" className="font-medium text-grass-400 hover:text-grass-300">
+              <a 
+                href="https://wa.me/5527998337568" 
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-grass-400 hover:text-grass-300"
+              >
                 Fale com o suporte
               </a>
             </p>
