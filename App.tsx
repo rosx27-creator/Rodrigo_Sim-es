@@ -7,7 +7,7 @@ import { PlayerList } from './components/PlayerList';
 import { TeamDisplay } from './components/TeamDisplay';
 import { LoginScreen } from './components/LoginScreen';
 import { AdminDashboard } from './components/AdminDashboard';
-import { ReminderModal } from './components/ReminderModal';
+import { WhatsAppModal } from './components/WhatsAppModal';
 import { EditPlayerModal } from './components/EditPlayerModal';
 import { NotificationToast, Notification } from './components/NotificationToast';
 import { generateBalancedTeams, generateInviteMessage, generateReminderMessage } from './services/geminiService';
@@ -127,7 +127,12 @@ const App: React.FC = () => {
 
   // Logic for Reminders (Is the match tomorrow?)
   const [isMatchTomorrow, setIsMatchTomorrow] = useState(false);
-  const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+  
+  // Unified WhatsApp Modal State
+  const [whatsAppModal, setWhatsAppModal] = useState<{
+    isOpen: boolean;
+    mode: 'invite' | 'reminder';
+  }>({ isOpen: false, mode: 'invite' });
 
   useEffect(() => {
     if (matchDetails.date) {
@@ -155,7 +160,6 @@ const App: React.FC = () => {
   
   // Loading States
   const [isSorting, setIsSorting] = useState(false);
-  const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
 
   // Handlers
   const handleAddPlayer = (player: Player) => {
@@ -217,6 +221,15 @@ const App: React.FC = () => {
             const result = await generateBalancedTeams(confirmedPlayers, matchDetails.teamsCount);
             setSortResult(result);
             showNotification("Times sorteados com sucesso!", 'success');
+            
+            // Auto-scroll suave para resultados
+            setTimeout(() => {
+                const resultsElement = document.getElementById('results');
+                if (resultsElement) {
+                    resultsElement.scrollIntoView({ behavior: 'smooth' });
+                }
+            }, 100);
+
         } catch (error) {
             console.error("Erro ao sortear:", error);
             alert("Erro ao realizar o sorteio.");
@@ -226,27 +239,16 @@ const App: React.FC = () => {
     }, 800);
   };
 
-  const handleGenerateInvite = async () => {
-    if (!matchDetails.date || !matchDetails.time || !matchDetails.location) {
-      alert("Preencha os detalhes da partida primeiro!");
-      return;
-    }
-    
-    setIsGeneratingInvite(true);
-    try {
-        const message = await generateInviteMessage(matchDetails);
-        const encodedMsg = encodeURIComponent(message);
-        window.open(`https://wa.me/?text=${encodedMsg}`, '_blank');
-    } catch (error) {
-        console.error(error);
-        alert("Erro ao gerar convite.");
-    } finally {
-        setIsGeneratingInvite(false);
-    }
+  const handleOpenInvite = () => {
+      if (!matchDetails.date || !matchDetails.time || !matchDetails.location) {
+          alert("Preencha os detalhes da partida primeiro!");
+          return;
+      }
+      setWhatsAppModal({ isOpen: true, mode: 'invite' });
   };
 
   const handleOpenReminders = () => {
-      setIsReminderModalOpen(true);
+      setWhatsAppModal({ isOpen: true, mode: 'reminder' });
   };
 
   // --- RENDER ---
@@ -281,13 +283,19 @@ const App: React.FC = () => {
           />
       )}
 
-      {/* Reminder Modal */}
-      {isReminderModalOpen && (
-        <ReminderModal 
-            isOpen={isReminderModalOpen}
-            onClose={() => setIsReminderModalOpen(false)}
-            players={players.filter(p => p.confirmed)}
-            onGenerateMessage={() => generateReminderMessage(matchDetails, players.filter(p => p.confirmed))}
+      {/* Unified WhatsApp Modal (Invite & Reminder) */}
+      {whatsAppModal.isOpen && (
+        <WhatsAppModal
+            isOpen={whatsAppModal.isOpen}
+            onClose={() => setWhatsAppModal({ ...whatsAppModal, isOpen: false })}
+            mode={whatsAppModal.mode}
+            matchDetails={matchDetails}
+            players={whatsAppModal.mode === 'reminder' ? players.filter(p => p.confirmed) : []}
+            onGenerateMessage={() => 
+                whatsAppModal.mode === 'invite' 
+                    ? generateInviteMessage(matchDetails)
+                    : generateReminderMessage(matchDetails, players.filter(p => p.confirmed))
+            }
         />
       )}
 
@@ -323,7 +331,7 @@ const App: React.FC = () => {
                         ? 'bg-orange-900/30 text-orange-400 border-orange-500/50 animate-pulse shadow-lg shadow-orange-500/10' 
                         : 'bg-slate-700 text-slate-400 border-slate-600 hover:bg-slate-600'
                     }`}
-                    title={isMatchTomorrow ? "Enviar Lembretes (Jogo Amanhã!)" : "Lembretes"}
+                    title={isMatchTomorrow ? "Enviar Lembretes (Jogo Amanhã!)" : "Lembretes e Cobranças"}
                  >
                     <Bell size={16} className={isMatchTomorrow ? 'fill-orange-400' : ''} />
                     {isMatchTomorrow && (
@@ -332,12 +340,11 @@ const App: React.FC = () => {
                  </button>
 
                  <button
-                    onClick={handleGenerateInvite}
-                    disabled={isGeneratingInvite}
+                    onClick={handleOpenInvite}
                     className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg flex items-center gap-2 text-sm transition-colors border border-slate-600"
                     title="Criar Convite WhatsApp"
                  >
-                    {isGeneratingInvite ? <Loader2 className="animate-spin w-4 h-4" /> : <MessageCircle className="w-4 h-4 text-green-400" />}
+                    <MessageCircle className="w-4 h-4 text-green-400" />
                     <span className="hidden sm:inline">Convite</span>
                  </button>
 
