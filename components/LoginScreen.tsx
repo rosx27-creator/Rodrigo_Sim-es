@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { Trophy, Lock, Mail, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { Trophy, Lock, Mail, ArrowRight, Loader2, AlertCircle, Database } from 'lucide-react';
 import { UserAccount } from '../types';
 
 interface LoginScreenProps {
@@ -116,6 +115,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin }) => {
               </a>
             </p>
           </div>
+        </div>
+
+        {/* Local Storage Notice */}
+        <div className="mt-8 bg-slate-800/50 border border-slate-700/50 p-4 rounded-xl flex gap-3 items-start">
+            <Database className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
+            <div className="text-xs text-slate-400">
+                <p className="font-bold text-slate-300 mb-1">Modo Offline / Local</p>
+                <p>Este aplicativo salva os dados no navegador. Se você trocar de computador, precisará usar a função <strong>Backup & Restaurar</strong> no painel do Administrador para transferir seus logins e jogos.</p>
+            </div>
         </div>
       </div>
     </div>

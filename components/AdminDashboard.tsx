@@ -1,20 +1,22 @@
-
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { UserAccount, PlanTier, PLAN_LIMITS } from '../types';
-import { UserPlus, Trash2, LogOut, ShieldCheck, Users, Crown } from 'lucide-react';
+import { UserPlus, Trash2, LogOut, ShieldCheck, Users, Crown, Database, Download, Upload, AlertTriangle } from 'lucide-react';
 
 interface AdminDashboardProps {
   users: UserAccount[];
   onAddUser: (user: UserAccount) => void;
   onDeleteUser: (id: string) => void;
   onLogout: () => void;
+  onRestore: (data: any) => void;
 }
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, onAddUser, onDeleteUser, onLogout }) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, onAddUser, onDeleteUser, onLogout, onRestore }) => {
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserName, setNewUserName] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<PlanTier>(PlanTier.AMADOR);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +36,61 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, onAddUser
     setNewUserPassword('');
     setNewUserName('');
     alert('Usuário criado com sucesso!');
+  };
+
+  const handleBackup = () => {
+      // Collect all pelada_ data from localStorage
+      const appData: Record<string, string> = {};
+      for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('pelada_')) {
+              const value = localStorage.getItem(key);
+              if (value) appData[key] = value;
+          }
+      }
+
+      const backup = {
+          version: 1,
+          date: new Date().toISOString(),
+          users: users,
+          appData: appData
+      };
+
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup));
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href", dataStr);
+      downloadAnchorNode.setAttribute("download", "peladapro_backup_" + new Date().toISOString().slice(0, 10) + ".json");
+      document.body.appendChild(downloadAnchorNode); // required for firefox
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+  };
+
+  const handleImportClick = () => {
+      fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const fileObj = event.target.files && event.target.files[0];
+      if (!fileObj) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+          try {
+              const text = e.target?.result;
+              if (typeof text === 'string') {
+                  const data = JSON.parse(text);
+                  if (confirm("ATENÇÃO: Restaurar um backup irá substituir TODOS os dados atuais deste dispositivo. Deseja continuar?")) {
+                      onRestore(data);
+                  }
+              }
+          } catch (err) {
+              alert("Erro ao ler arquivo de backup.");
+              console.error(err);
+          }
+      };
+      reader.readAsText(fileObj);
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   return (
@@ -57,8 +114,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, onAddUser
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Create User Form */}
-          <div className="lg:col-span-1">
-            <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 sticky top-6">
+          <div className="lg:col-span-1 space-y-6">
+            <div className="bg-slate-800 p-6 rounded-xl border border-slate-700">
               <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-indigo-400" /> Novo Cliente
               </h2>
@@ -117,6 +174,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ users, onAddUser
                   Criar Conta
                 </button>
               </form>
+            </div>
+
+            {/* System Data Management */}
+            <div className="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                    <Database className="w-5 h-5 text-yellow-500" /> Gestão de Dados
+                </h2>
+                <div className="bg-yellow-900/20 p-3 rounded-lg border border-yellow-700/30 mb-4">
+                    <p className="text-xs text-yellow-200 flex gap-2">
+                        <AlertTriangle size={16} className="shrink-0" />
+                        O sistema utiliza armazenamento local. Para usar os mesmos dados (usuários e jogos) em outro computador, faça o backup aqui e restaure na outra máquina.
+                    </p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                    <button 
+                        onClick={handleBackup}
+                        className="flex flex-col items-center justify-center gap-2 p-4 bg-slate-700 hover:bg-slate-600 rounded-lg border border-slate-600 transition-all"
+                    >
+                        <Download className="w-6 h-6 text-grass-400" />
+                        <span className="text-sm font-medium text-slate-200">Baixar Backup</span>
+                    </button>
+                    
+                    <button 
+                        onClick={handleImportClick}
+                        className="flex flex-col items-center justify-center gap-2 p-4 bg-slate-700 hover:bg-slate-600 rounded-lg border border-slate-600 transition-all"
+                    >
+                        <Upload className="w-6 h-6 text-blue-400" />
+                        <span className="text-sm font-medium text-slate-200">Restaurar</span>
+                    </button>
+                    <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleFileChange} 
+                        accept=".json" 
+                        className="hidden" 
+                    />
+                </div>
             </div>
           </div>
 

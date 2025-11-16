@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { MatchDetails, Player, SortResult, PlanTier, PLAN_LIMITS, UserAccount, Match } from './types';
 import { MatchSetup } from './components/MatchSetup';
@@ -71,6 +70,33 @@ const App: React.FC = () => {
       if (confirm('Tem certeza que deseja excluir este usuário?')) {
           setUsers(prev => prev.filter(u => u.id !== userId));
       }
+  };
+
+  // Logic to restore database from file
+  const handleRestoreDatabase = (backupData: any) => {
+    try {
+        // 1. Restore Users
+        if (backupData.users && Array.isArray(backupData.users)) {
+            setUsers(backupData.users);
+            localStorage.setItem('pelada_users', JSON.stringify(backupData.users));
+        }
+        
+        // 2. Restore App Data (Matches, etc)
+        if (backupData.appData) {
+            Object.entries(backupData.appData).forEach(([key, value]) => {
+                // Security check: only restore app specific keys
+                if (key.startsWith('pelada_')) {
+                     localStorage.setItem(key, value as string);
+                }
+            });
+        }
+        
+        alert('Backup restaurado com sucesso! O sistema será reiniciado para aplicar as alterações.');
+        window.location.reload();
+    } catch (error) {
+        console.error("Restore error:", error);
+        alert('Erro ao processar o arquivo de backup. Verifique se o arquivo é válido.');
+    }
   };
 
 
@@ -378,7 +404,15 @@ const App: React.FC = () => {
   }
 
   if (currentUser.role === 'admin') {
-      return <AdminDashboard users={users} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} onLogout={handleLogout} />;
+      return (
+        <AdminDashboard 
+            users={users} 
+            onAddUser={handleAddUser} 
+            onDeleteUser={handleDeleteUser} 
+            onLogout={handleLogout} 
+            onRestore={handleRestoreDatabase}
+        />
+      );
   }
 
   const getPlanBadgeColor = () => {
